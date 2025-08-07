@@ -1,0 +1,502 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HighIQ Voice Agent Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        dark: {
+                            50: '#f8fafc',
+                            100: '#f1f5f9',
+                            200: '#e2e8f0',
+                            300: '#cbd5e1',
+                            400: '#94a3b8',
+                            500: '#64748b',
+                            600: '#475569',
+                            700: '#334155',
+                            800: '#1e293b',
+                            900: '#0f172a'
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        .loading { animation: pulse 2s infinite; }
+        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
+        .gradient-bg { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); }
+        .glass-effect { backdrop-filter: blur(10px); background: rgba(255, 255, 255, 0.1); }
+        .card-hover { transition: all 0.3s ease; }
+        .card-hover:hover { transform: translateY(-2px); box-shadow: 0 10px 25px rgba(0,0,0,0.2); }
+        .neon-text { text-shadow: 0 0 10px rgba(34, 197, 94, 0.5); }
+    </style>
+</head>
+<body class="dark bg-dark-900 text-white min-h-screen">
+    <!-- Animated Background -->
+    <div class="fixed inset-0 overflow-hidden pointer-events-none">
+        <div class="absolute -inset-10 opacity-30">
+            <div class="absolute top-0 -left-4 w-72 h-72 bg-purple-500 rounded-full mix-blend-multiply filter blur-xl animate-pulse"></div>
+            <div class="absolute top-0 -right-4 w-72 h-72 bg-yellow-500 rounded-full mix-blend-multiply filter blur-xl animate-pulse animation-delay-2000"></div>
+            <div class="absolute -bottom-8 left-20 w-72 h-72 bg-pink-500 rounded-full mix-blend-multiply filter blur-xl animate-pulse animation-delay-4000"></div>
+        </div>
+    </div>
+
+    <div class="relative z-10 container mx-auto px-4 py-8">
+        <!-- Header -->
+        <div class="bg-dark-800/80 backdrop-blur-lg rounded-2xl shadow-2xl p-8 mb-8 border border-dark-700 card-hover">
+            <div class="flex items-center justify-between">
+                <div>
+                    <h1 class="text-4xl font-bold bg-gradient-to-r from-blue-400 to-purple-400 bg-clip-text text-transparent mb-2">
+                        🎙️ HighIQ Voice Agent Dashboard
+                    </h1>
+                    <p class="text-dark-300 text-lg">Real-time AI voice agent analytics & insights</p>
+                </div>
+                <div class="text-right">
+                    <div id="status" class="px-4 py-2 bg-dark-700 text-dark-300 rounded-full text-sm mb-2 loading">
+                        🔄 Initializing...
+                    </div>
+                    <div class="text-sm text-dark-400">
+                        Last updated: <span id="lastUpdate">--:--</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Stats Cards -->
+        <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6 mb-8">
+            <div class="bg-dark-800/80 backdrop-blur-lg p-6 rounded-2xl shadow-2xl border border-dark-700 border-l-4 border-l-blue-500 card-hover">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <h3 class="text-sm font-medium text-dark-300 uppercase tracking-wide">Total Calls</h3>
+                        <p id="totalCalls" class="text-3xl font-bold text-blue-400 neon-text loading">-</p>
+                    </div>
+                    <div class="bg-blue-500/20 p-3 rounded-lg">
+                        <svg class="w-8 h-8 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z"></path>
+                        </svg>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="bg-dark-800/80 backdrop-blur-lg p-6 rounded-2xl shadow-2xl border border-dark-700 border-l-4 border-l-green-500 card-hover">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <h3 class="text-sm font-medium text-dark-300 uppercase tracking-wide">Conversations</h3>
+                        <p id="totalConversations" class="text-3xl font-bold text-green-400 neon-text loading">-</p>
+                    </div>
+                    <div class="bg-green-500/20 p-3 rounded-lg">
+                        <svg class="w-8 h-8 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"></path>
+                        </svg>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="bg-dark-800/80 backdrop-blur-lg p-6 rounded-2xl shadow-2xl border border-dark-700 border-l-4 border-l-yellow-500 card-hover">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <h3 class="text-sm font-medium text-dark-300 uppercase tracking-wide">Avg Response</h3>
+                        <p id="avgResponseTime" class="text-3xl font-bold text-yellow-400 neon-text loading">-</p>
+                    </div>
+                    <div class="bg-yellow-500/20 p-3 rounded-lg">
+                        <svg class="w-8 h-8 text-yellow-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path>
+                        </svg>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="bg-dark-800/80 backdrop-blur-lg p-6 rounded-2xl shadow-2xl border border-dark-700 border-l-4 border-l-purple-500 card-hover">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <h3 class="text-sm font-medium text-dark-300 uppercase tracking-wide">Success Rate</h3>
+                        <p id="successRate" class="text-3xl font-bold text-purple-400 neon-text loading">-</p>
+                    </div>
+                    <div class="bg-purple-500/20 p-3 rounded-lg">
+                        <svg class="w-8 h-8 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                        </svg>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Main Content -->
+        <div class="bg-dark-800/80 backdrop-blur-lg rounded-2xl shadow-2xl border border-dark-700 overflow-hidden">
+            <!-- Tabs -->
+            <div class="border-b border-dark-700 bg-dark-900/50">
+                <nav class="flex space-x-8 px-8">
+                    <button onclick="showTab('calls')" id="tab-calls" class="py-4 px-2 border-b-2 border-blue-500 text-blue-400 font-medium text-sm transition-all duration-300">
+                        📞 Recent Calls
+                    </button>
+                    <button onclick="showTab('conversations')" id="tab-conversations" class="py-4 px-2 border-b-2 border-transparent text-dark-400 hover:text-dark-200 font-medium text-sm transition-all duration-300">
+                        💬 Conversations
+                    </button>
+                    <button onclick="showTab('analytics')" id="tab-analytics" class="py-4 px-2 border-b-2 border-transparent text-dark-400 hover:text-dark-200 font-medium text-sm transition-all duration-300">
+                        📊 Analytics
+                    </button>
+                </nav>
+            </div>
+
+            <!-- Calls Tab -->
+            <div id="content-calls" class="p-8">
+                <div class="flex items-center justify-between mb-6">
+                    <h3 class="text-xl font-semibold text-white">Recent Calls</h3>
+                    <button onclick="refreshData()" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors duration-200">
+                        🔄 Refresh
+                    </button>
+                </div>
+                <div id="callsList" class="space-y-4">
+                    <div class="loading text-dark-400 text-center py-8">
+                        <div class="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-400 mb-4"></div>
+                        <div>Loading calls...</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Conversations Tab -->
+            <div id="content-conversations" class="p-8 hidden">
+                <div class="flex items-center justify-between mb-6">
+                    <h3 class="text-xl font-semibold text-white">Recent Conversations</h3>
+                    <button onclick="refreshData()" class="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors duration-200">
+                        🔄 Refresh
+                    </button>
+                </div>
+                <div id="conversationsList" class="space-y-4">
+                    <div class="loading text-dark-400 text-center py-8">
+                        <div class="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-green-400 mb-4"></div>
+                        <div>Loading conversations...</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Analytics Tab -->
+            <div id="content-analytics" class="p-8 hidden">
+                <div class="flex items-center justify-between mb-6">
+                    <h3 class="text-xl font-semibold text-white">Performance Analytics</h3>
+                    <button onclick="refreshData()" class="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg transition-colors duration-200">
+                        📊 Refresh
+                    </button>
+                </div>
+                <div id="analyticsContent" class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    <div class="bg-dark-700/50 rounded-xl p-6 border border-dark-600">
+                        <h4 class="text-lg font-medium text-white mb-4">📈 Call Volume Trend</h4>
+                        <div id="callVolumeChart" class="text-dark-400 text-center py-8">
+                            Chart loading...
+                        </div>
+                    </div>
+                    <div class="bg-dark-700/50 rounded-xl p-6 border border-dark-600">
+                        <h4 class="text-lg font-medium text-white mb-4">⚡ Response Time Distribution</h4>
+                        <div id="responseTimeChart" class="text-dark-400 text-center py-8">
+                            Chart loading...
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Debug Console -->
+        <div class="bg-dark-900 text-green-400 p-6 rounded-2xl mt-8 border border-dark-700 font-mono text-sm">
+            <div class="flex items-center justify-between mb-4">
+                <div class="text-green-300 font-semibold">🔧 System Console</div>
+                <button onclick="clearDebug()" class="text-red-400 hover:text-red-300 transition-colors">Clear</button>
+            </div>
+            <div id="debugInfo" class="min-h-20 max-h-40 overflow-y-auto">
+                Initializing dashboard systems...
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let debugLog = [];
+        
+        function addDebug(message, type = 'info') {
+            const timestamp = new Date().toTimeString().split(' ')[0];
+            const icon = type === 'error' ? '❌' : type === 'success' ? '✅' : 'ℹ️';
+            debugLog.push(`<span class="text-dark-400">${timestamp}</span> ${icon} ${message}`);
+            
+            // Keep only last 10 messages
+            if (debugLog.length > 10) debugLog.shift();
+            
+            document.getElementById('debugInfo').innerHTML = debugLog.join('<br>');
+        }
+
+        function clearDebug() {
+            debugLog = [];
+            document.getElementById('debugInfo').innerHTML = 'Console cleared.';
+        }
+
+        function showTab(tabName) {
+            // Hide all tabs
+            ['calls', 'conversations', 'analytics'].forEach(tab => {
+                document.getElementById(`content-${tab}`).classList.add('hidden');
+                document.getElementById(`tab-${tab}`).className = 'py-4 px-2 border-b-2 border-transparent text-dark-400 hover:text-dark-200 font-medium text-sm transition-all duration-300';
+            });
+            
+            // Show selected tab
+            document.getElementById(`content-${tabName}`).classList.remove('hidden');
+            
+            // Update active tab style
+            const colors = { calls: 'blue', conversations: 'green', analytics: 'purple' };
+            const color = colors[tabName];
+            document.getElementById(`tab-${tabName}`).className = `py-4 px-2 border-b-2 border-${color}-500 text-${color}-400 font-medium text-sm transition-all duration-300`;
+        }
+
+        async function fetchData(endpoint, description) {
+            try {
+                addDebug(`Fetching ${description}...`);
+                const response = await fetch(endpoint);
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+                
+                const data = await response.json();
+                addDebug(`${description} loaded successfully`, 'success');
+                return data;
+            } catch (error) {
+                addDebug(`${description} failed: ${error.message}`, 'error');
+                return null;
+            }
+        }
+
+        async function loadStats() {
+            const stats = await fetchData('/dashboard/stats', 'Dashboard stats');
+            
+            if (stats) {
+                document.getElementById('totalCalls').textContent = stats.overview?.totalCalls || 0;
+                document.getElementById('totalConversations').textContent = stats.overview?.totalConversations || 0;
+                document.getElementById('avgResponseTime').textContent = `${stats.overview?.avgResponseTime || 0}ms`;
+                document.getElementById('successRate').textContent = `${stats.overview?.successRate || 0}%`;
+                
+                // Remove loading animation
+                document.querySelectorAll('.loading').forEach(el => el.classList.remove('loading'));
+                
+                document.getElementById('status').innerHTML = '🟢 Agent Online';
+                document.getElementById('status').className = 'px-4 py-2 bg-green-900/50 text-green-300 rounded-full text-sm border border-green-700';
+                
+                document.getElementById('lastUpdate').textContent = new Date().toLocaleTimeString();
+                
+            } else {
+                document.getElementById('status').innerHTML = '🔴 API Error';
+                document.getElementById('status').className = 'px-4 py-2 bg-red-900/50 text-red-300 rounded-full text-sm border border-red-700';
+            }
+        }
+
+        async function loadCalls() {
+            const callsData = await fetchData('/dashboard/calls?limit=8', 'Recent calls');
+            const callsList = document.getElementById('callsList');
+            
+            if (callsData && callsData.calls && callsData.calls.length > 0) {
+                callsList.innerHTML = callsData.calls.map(call => `
+                    <div class="bg-dark-700/50 border border-dark-600 rounded-xl p-6 hover:bg-dark-700/70 transition-all duration-300 card-hover">
+                        <div class="flex justify-between items-start">
+                            <div class="flex-1">
+                                <div class="flex items-center space-x-3 mb-2">
+                                    <div class="font-mono text-sm text-blue-400">${call.id?.substring(0, 12)}...</div>
+                                    <span class="px-3 py-1 text-xs rounded-full ${call.status === 'answered' ? 'bg-green-900/50 text-green-300 border border-green-700' : 'bg-red-900/50 text-red-300 border border-red-700'}">
+                                        ${call.status}
+                                    </span>
+                                </div>
+                                <div class="text-dark-300 text-sm mb-1">
+                                    📱 From: <span class="text-white font-medium">${call.from}</span>
+                                </div>
+                                <div class="text-dark-400 text-sm mb-2">
+                                    📅 ${new Date(call.timestamp).toLocaleString()}
+                                </div>
+                                ${call.duration > 0 ? `<div class="text-dark-400 text-xs">⏱️ Duration: ${call.duration}s</div>` : ''}
+                            </div>
+                            <div class="text-right">
+                                ${call.demoRequested ? '<div class="px-2 py-1 bg-purple-900/50 text-purple-300 text-xs rounded border border-purple-700">📺 Demo</div>' : ''}
+                            </div>
+                        </div>
+                    </div>
+                `).join('');
+            } else {
+                callsList.innerHTML = `
+                    <div class="text-center text-dark-400 py-12">
+                        <div class="text-6xl mb-4 opacity-50">📞</div>
+                        <div class="text-xl mb-2 text-dark-300">No calls yet</div>
+                        <div class="text-sm mb-6">Make a test call to see data here</div>
+                        <button onclick="makeTestCall()" class="px-6 py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-lg hover:from-blue-700 hover:to-purple-700 transition-all duration-300 transform hover:scale-105">
+                            📞 Make Test Call
+                        </button>
+                    </div>
+                `;
+            }
+        }
+
+        async function loadConversations() {
+            const convData = await fetchData('/dashboard/conversations?limit=6', 'Recent conversations');
+            const convList = document.getElementById('conversationsList');
+            
+            if (convData && convData.conversations && convData.conversations.length > 0) {
+                convList.innerHTML = convData.conversations.map(conv => `
+                    <div class="bg-dark-700/50 border border-dark-600 rounded-xl p-6 hover:bg-dark-700/70 transition-all duration-300 card-hover">
+                        <div class="flex items-center justify-between mb-4">
+                            <div class="text-xs text-dark-400 font-mono">${conv.callSid?.substring(0, 12)}...</div>
+                            <div class="text-xs text-dark-400">${new Date(conv.timestamp).toLocaleString()}</div>
+                        </div>
+                        
+                        <div class="space-y-4">
+                            <div class="border-l-4 border-blue-500 pl-4">
+                                <div class="font-medium text-blue-400 text-sm mb-1">👤 Customer:</div>
+                                <div class="text-dark-200">${conv.customerMessage}</div>
+                            </div>
+                            
+                            <div class="border-l-4 border-green-500 pl-4">
+                                <div class="font-medium text-green-400 text-sm mb-1">🤖 AI Response:</div>
+                                <div class="text-dark-200">${conv.aiResponse}</div>
+                            </div>
+                        </div>
+                        
+                        <div class="flex items-center justify-between mt-4 pt-4 border-t border-dark-600">
+                            <div class="text-xs text-dark-400">
+                                ⚡ Response: ${Math.round(conv.responseTime)}ms
+                            </div>
+                            <div class="text-xs text-dark-400">
+                                🎤 Confidence: ${conv.confidence}
+                            </div>
+                        </div>
+                    </div>
+                `).join('');
+            } else {
+                convList.innerHTML = `
+                    <div class="text-center text-dark-400 py-12">
+                        <div class="text-6xl mb-4 opacity-50">💬</div>
+                        <div class="text-xl mb-2 text-dark-300">No conversations yet</div>
+                        <div class="text-sm">Have a conversation to see data here</div>
+                    </div>
+                `;
+            }
+        }
+
+        async function loadAnalytics() {
+            const analyticsContent = document.getElementById('analyticsContent');
+            
+            // Simple analytics display for now
+            const stats = await fetchData('/dashboard/stats', 'Analytics data');
+            
+            if (stats) {
+                const callVolumeHtml = `
+                    <div class="space-y-4">
+                        <div class="flex justify-between items-center">
+                            <span class="text-dark-300">Total Calls:</span>
+                            <span class="text-blue-400 font-bold">${stats.overview.totalCalls}</span>
+                        </div>
+                        <div class="flex justify-between items-center">
+                            <span class="text-dark-300">Completed:</span>
+                            <span class="text-green-400 font-bold">${stats.overview.completedCalls}</span>
+                        </div>
+                        <div class="flex justify-between items-center">
+                            <span class="text-dark-300">Success Rate:</span>
+                            <span class="text-purple-400 font-bold">${stats.overview.successRate}%</span>
+                        </div>
+                    </div>
+                `;
+                
+                const responseTimeHtml = `
+                    <div class="space-y-4">
+                        <div class="flex justify-between items-center">
+                            <span class="text-dark-300">Avg Response:</span>
+                            <span class="text-yellow-400 font-bold">${stats.overview.avgResponseTime}ms</span>
+                        </div>
+                        <div class="flex justify-between items-center">
+                            <span class="text-dark-300">Fast Responses:</span>
+                            <span class="text-green-400 font-bold">${stats.performance?.fastResponses || 0}</span>
+                        </div>
+                        <div class="flex justify-between items-center">
+                            <span class="text-dark-300">Slow Responses:</span>
+                            <span class="text-red-400 font-bold">${stats.performance?.slowResponses || 0}</span>
+                        </div>
+                    </div>
+                `;
+                
+                document.getElementById('callVolumeChart').innerHTML = callVolumeHtml;
+                document.getElementById('responseTimeChart').innerHTML = responseTimeHtml;
+            } else {
+                document.getElementById('callVolumeChart').innerHTML = '<div class="text-red-400">⚠️ Analytics data unavailable</div>';
+                document.getElementById('responseTimeChart').innerHTML = '<div class="text-red-400">⚠️ Analytics data unavailable</div>';
+            }
+        }
+
+        async function makeTestCall() {
+            try {
+                addDebug('Initiating test call...', 'info');
+                const response = await fetch('/voice/call-me', { method: 'POST' });
+                const result = await response.json();
+                
+                if (result.success) {
+                    addDebug(`Test call initiated: ${result.callSid}`, 'success');
+                    // Refresh data after a few seconds
+                    setTimeout(refreshData, 3000);
+                } else {
+                    addDebug(`Test call failed: ${result.error}`, 'error');
+                }
+            } catch (error) {
+                addDebug(`Test call error: ${error.message}`, 'error');
+            }
+        }
+
+        async function refreshData() {
+            addDebug('Refreshing dashboard data...', 'info');
+            await Promise.all([
+                loadStats(),
+                loadCalls(),
+                loadConversations(),
+                loadAnalytics()
+            ]);
+            addDebug('Dashboard refreshed successfully', 'success');
+        }
+
+        // Initialize dashboard
+        window.addEventListener('load', async () => {
+            addDebug('🚀 Dashboard initializing...', 'info');
+            
+            // Load all data
+            await refreshData();
+            
+            // Set up auto-refresh every 30 seconds
+            setInterval(async () => {
+                addDebug('🔄 Auto-refreshing data...', 'info');
+                await loadStats();
+                await loadCalls();
+                await loadConversations();
+            }, 30000);
+            
+            addDebug('✅ Dashboard ready!', 'success');
+        });
+
+        // Add some keyboard shortcuts
+        document.addEventListener('keydown', (e) => {
+            if (e.ctrlKey || e.metaKey) {
+                switch(e.key) {
+                    case 'r':
+                        e.preventDefault();
+                        refreshData();
+                        break;
+                    case '1':
+                        e.preventDefault();
+                        showTab('calls');
+                        break;
+                    case '2':
+                        e.preventDefault();
+                        showTab('conversations');
+                        break;
+                    case '3':
+                        e.preventDefault();
+                        showTab('analytics');
+                        break;
+                }
+            }
+        });
+    </script>
+</body>
+</html>
