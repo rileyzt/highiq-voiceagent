@@ -1,138 +1,108 @@
-const sqlite3 = require('sqlite3').verbose();
 const path = require('path');
 const fs = require('fs');
 
-// Database file path
-const dbDir = path.join(__dirname);
-const dbPath = path.join(dbDir, 'voice_agent.db');
+// JSON file paths
+const dataDir = path.join(__dirname, '../data');
+const callsFile = path.join(dataDir, 'calls.json');
+const conversationsFile = path.join(dataDir, 'conversations.json');
+const smsFile = path.join(dataDir, 'sms_logs.json');
 
-// Ensure database directory exists
-if (!fs.existsSync(dbDir)) {
-    fs.mkdirSync(dbDir, { recursive: true });
+// Ensure data directory exists
+if (!fs.existsSync(dataDir)) {
+    fs.mkdirSync(dataDir, { recursive: true });
 }
 
-// Initialize database connection
-const db = new sqlite3.Database(dbPath, (err) => {
-    if (err) {
-        console.error('❌ Error opening database:', err.message);
-    } else {
-        console.log('✅ Connected to SQLite database:', dbPath);
+// Initialize JSON files if they don't exist
+const initializeFiles = () => {
+    if (!fs.existsSync(callsFile)) {
+        fs.writeFileSync(callsFile, JSON.stringify([], null, 2));
+        console.log('✅ Created calls.json');
     }
-});
-
-// Create tables if they don't exist
-const initializeTables = () => {
-    return new Promise((resolve, reject) => {
-        db.serialize(() => {
-            // Customers table
-            db.run(`CREATE TABLE IF NOT EXISTS customers (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                phone TEXT UNIQUE NOT NULL,
-                first_call_date TEXT,
-                total_calls INTEGER DEFAULT 0,
-                demo_sent BOOLEAN DEFAULT 0,
-                demo_sent_date TEXT,
-                service_interest TEXT,
-                lead_status TEXT DEFAULT 'new',
-                notes TEXT,
-                created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-                updated_at TEXT DEFAULT CURRENT_TIMESTAMP
-            )`);
-
-            // Call logs table
-            db.run(`CREATE TABLE IF NOT EXISTS call_logs (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                call_sid TEXT UNIQUE NOT NULL,
-                customer_phone TEXT,
-                call_duration INTEGER DEFAULT 0,
-                call_status TEXT DEFAULT 'initiated',
-                conversation_summary TEXT,
-                demo_requested BOOLEAN DEFAULT 0,
-                call_date TEXT DEFAULT CURRENT_TIMESTAMP,
-                to_number TEXT,
-                FOREIGN KEY (customer_phone) REFERENCES customers(phone)
-            )`);
-
-            // Conversations table
-            db.run(`CREATE TABLE IF NOT EXISTS conversations (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                call_sid TEXT NOT NULL,
-                customer_phone TEXT,
-                customer_message TEXT,
-                ai_response TEXT,
-                response_time INTEGER,
-                stt_confidence TEXT,
-                timestamp TEXT DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (call_sid) REFERENCES call_logs(call_sid),
-                FOREIGN KEY (customer_phone) REFERENCES customers(phone)
-            )`);
-
-            // SMS logs table
-            db.run(`CREATE TABLE IF NOT EXISTS sms_logs (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                customer_phone TEXT,
-                message_type TEXT DEFAULT 'demo_delivery',
-                message_sent TEXT,
-                sms_sid TEXT,
-                sent_date TEXT DEFAULT CURRENT_TIMESTAMP,
-                delivery_status TEXT DEFAULT 'sent',
-                FOREIGN KEY (customer_phone) REFERENCES customers(phone)
-            )`, (err) => {
-                if (err) {
-                    console.error('❌ Error creating tables:', err.message);
-                    reject(err);
-                } else {
-                    console.log('✅ Database tables initialized');
-                    resolve();
-                }
-            });
-        });
-    });
+    if (!fs.existsSync(conversationsFile)) {
+        fs.writeFileSync(conversationsFile, JSON.stringify([], null, 2));
+        console.log('✅ Created conversations.json');
+    }
+    if (!fs.existsSync(smsFile)) {
+        fs.writeFileSync(smsFile, JSON.stringify([], null, 2));
+        console.log('✅ Created sms_logs.json');
+    }
+    console.log('✅ JSON storage initialized');
 };
 
-// Initialize tables on startup
-initializeTables().catch(console.error);
+// Helper functions to read/write JSON
+const readJSON = (filePath) => {
+    try {
+        const data = fs.readFileSync(filePath, 'utf8');
+        return JSON.parse(data);
+    } catch (error) {
+        console.error(`❌ Error reading ${filePath}:`, error.message);
+        return [];
+    }
+};
+
+const writeJSON = (filePath, data) => {
+    try {
+        fs.writeFileSync(filePath, JSON.stringify(data, null, 2));
+        return true;
+    } catch (error) {
+        console.error(`❌ Error writing ${filePath}:`, error.message);
+        return false;
+    }
+};
+
+// Initialize on startup
+initializeFiles();
 
 class CallLogger {
     // Log incoming call (compatible with existing voice.js)
     static logCall(callData) {
-        return new Promise((resolve, reject) => {
+        try {
             const { callSid, from, to, status, duration = 0 } = callData;
             
-            // First, ensure customer exists
-            this.upsertCustomer(from).then(() => {
-                // Insert call log
-                const stmt = db.prepare(`
-                    INSERT OR REPLACE INTO call_logs 
-                    (call_sid, customer_phone, to_number, call_status, call_duration, call_date)
-                    VALUES (?, ?, ?, ?, ?, ?)
-                `);
-                
-                stmt.run([
-                    callSid,
-                    from,
-                    to,
-                    status || 'initiated',
-                    duration,
-                    new Date().toISOString()
-                ], function(err) {
-                    if (err) {
-                        console.error('❌ Error logging call:', err.message);
-                        reject(err);
-                    } else {
-                        console.log(`📞 Call logged: ${callSid} from ${from}`);
-                        resolve(this.lastID);
-                    }
-                });
-                
-                stmt.finalize();
-            }).catch(reject);
-        });
+            // First, ensure customer tracking
+            this.upsertCustomer(from);
+            
+            // Read existing calls
+            const calls = readJSON(callsFile);
+            
+            // Create call record
+            const callRecord = {
+                id: calls.length + 1,
+                call_sid: callSid,
+                customer_phone: from,
+                to_number: to,
+                call_status: status || 'initiated',
+                call_duration: duration,
+                conversation_summary: '',
+                demo_requested: false,
+                call_date: new Date().toISOString()
+            };
+            
+            // Check if call already exists (prevent duplicates)
+            const existingIndex = calls.findIndex(call => call.call_sid === callSid);
+            if (existingIndex !== -1) {
+                // Update existing call
+                calls[existingIndex] = { ...calls[existingIndex], ...callRecord };
+            } else {
+                // Add new call
+                calls.push(callRecord);
+            }
+            
+            // Write back to file
+            writeJSON(callsFile, calls);
+            
+            console.log(`📞 Call logged: ${callSid} from ${from}`);
+            return Promise.resolve(callRecord.id);
+            
+        } catch (error) {
+            console.error('❌ Error logging call:', error.message);
+            return Promise.reject(error);
+        }
     }
 
     // Log conversation turn (compatible with existing voice.js)
     static logConversation(conversationData) {
-        return new Promise((resolve, reject) => {
+        try {
             const { 
                 callSid, 
                 customerMessage, 
@@ -142,359 +112,315 @@ class CallLogger {
             } = conversationData;
 
             // Get customer phone from call_sid
-            db.get(
-                'SELECT customer_phone FROM call_logs WHERE call_sid = ?',
-                [callSid],
-                (err, row) => {
-                    if (err) {
-                        console.error('❌ Error finding customer phone:', err.message);
-                        reject(err);
-                        return;
-                    }
+            const calls = readJSON(callsFile);
+            const callRecord = calls.find(call => call.call_sid === callSid);
+            
+            if (!callRecord) {
+                throw new Error(`Call ${callSid} not found`);
+            }
 
-                    const customerPhone = row?.customer_phone;
-                    
-                    const stmt = db.prepare(`
-                        INSERT INTO conversations 
-                        (call_sid, customer_phone, customer_message, ai_response, response_time, stt_confidence, timestamp)
-                        VALUES (?, ?, ?, ?, ?, ?, ?)
-                    `);
-                    
-                    stmt.run([
-                        callSid,
-                        customerPhone,
-                        customerMessage,
-                        aiResponse,
-                        responseTime || 0,
-                        sttConfidence || 'unknown',
-                        new Date().toISOString()
-                    ], function(err) {
-                        if (err) {
-                            console.error('❌ Error logging conversation:', err.message);
-                            reject(err);
-                        } else {
-                            console.log(`💬 Conversation logged for: ${callSid}`);
-                            resolve(this.lastID);
-                        }
-                    });
-                    
-                    stmt.finalize();
-                }
-            );
-        });
+            const customerPhone = callRecord.customer_phone;
+            
+            // Read existing conversations
+            const conversations = readJSON(conversationsFile);
+            
+            // Create conversation record
+            const conversationRecord = {
+                id: conversations.length + 1,
+                call_sid: callSid,
+                customer_phone: customerPhone,
+                customer_message: customerMessage,
+                ai_response: aiResponse,
+                response_time: responseTime || 0,
+                stt_confidence: sttConfidence || 'unknown',
+                timestamp: new Date().toISOString()
+            };
+            
+            // Add new conversation
+            conversations.push(conversationRecord);
+            
+            // Write back to file
+            writeJSON(conversationsFile, conversations);
+            
+            console.log(`💬 Conversation logged for: ${callSid}`);
+            return Promise.resolve(conversationRecord.id);
+            
+        } catch (error) {
+            console.error('❌ Error logging conversation:', error.message);
+            return Promise.reject(error);
+        }
     }
 
     // Upsert customer (create if doesn't exist, update if exists)
     static upsertCustomer(phone, additionalData = {}) {
-        return new Promise((resolve, reject) => {
+        try {
+            const calls = readJSON(callsFile);
             const now = new Date().toISOString();
             
-            // Check if customer exists
-            db.get('SELECT * FROM customers WHERE phone = ?', [phone], (err, row) => {
-                if (err) {
-                    reject(err);
-                    return;
-                }
-
-                if (row) {
-                    // Update existing customer
-                    const stmt = db.prepare(`
-                        UPDATE customers 
-                        SET total_calls = total_calls + 1, 
-                            updated_at = ?,
-                            service_interest = COALESCE(?, service_interest),
-                            notes = COALESCE(?, notes)
-                        WHERE phone = ?
-                    `);
-                    
-                    stmt.run([
-                        now,
-                        additionalData.service_interest,
-                        additionalData.notes,
-                        phone
-                    ], function(err) {
-                        if (err) {
-                            reject(err);
-                        } else {
-                            console.log(`👤 Customer updated: ${phone}`);
-                            resolve(row.id);
-                        }
-                    });
-                    stmt.finalize();
-                } else {
-                    // Create new customer
-                    const stmt = db.prepare(`
-                        INSERT INTO customers 
-                        (phone, first_call_date, total_calls, service_interest, notes, created_at, updated_at)
-                        VALUES (?, ?, 1, ?, ?, ?, ?)
-                    `);
-                    
-                    stmt.run([
-                        phone,
-                        now,
-                        additionalData.service_interest || 'general',
-                        additionalData.notes || '',
-                        now,
-                        now
-                    ], function(err) {
-                        if (err) {
-                            reject(err);
-                        } else {
-                            console.log(`👤 New customer created: ${phone}`);
-                            resolve(this.lastID);
-                        }
-                    });
-                    stmt.finalize();
-                }
-            });
-        });
+            // Find existing customer calls
+            const customerCalls = calls.filter(call => call.customer_phone === phone);
+            
+            if (customerCalls.length > 0) {
+                // Customer exists - just tracking via calls
+                console.log(`👤 Customer call tracked: ${phone}`);
+                return Promise.resolve(phone);
+            } else {
+                // New customer - will be tracked when call is logged
+                console.log(`👤 New customer will be tracked: ${phone}`);
+                return Promise.resolve(phone);
+            }
+            
+        } catch (error) {
+            console.error('❌ Error upserting customer:', error.message);
+            return Promise.reject(error);
+        }
     }
 
     // Log SMS delivery
     static logSMS(smsData) {
-        return new Promise((resolve, reject) => {
+        try {
             const { customerPhone, messageType, messageSent, smsSid, deliveryStatus } = smsData;
             
-            const stmt = db.prepare(`
-                INSERT INTO sms_logs 
-                (customer_phone, message_type, message_sent, sms_sid, delivery_status, sent_date)
-                VALUES (?, ?, ?, ?, ?, ?)
-            `);
+            // Read existing SMS logs
+            const smsLogs = readJSON(smsFile);
             
-            stmt.run([
-                customerPhone,
-                messageType || 'demo_delivery',
-                messageSent,
-                smsSid,
-                deliveryStatus || 'sent',
-                new Date().toISOString()
-            ], function(err) {
-                if (err) {
-                    console.error('❌ Error logging SMS:', err.message);
-                    reject(err);
-                } else {
-                    console.log(`📱 SMS logged: ${customerPhone}`);
-                    resolve(this.lastID);
-                }
-            });
+            // Create SMS record
+            const smsRecord = {
+                id: smsLogs.length + 1,
+                customer_phone: customerPhone,
+                message_type: messageType || 'demo_delivery',
+                message_sent: messageSent,
+                sms_sid: smsSid,
+                delivery_status: deliveryStatus || 'sent',
+                sent_date: new Date().toISOString()
+            };
             
-            stmt.finalize();
-        });
+            // Add new SMS log
+            smsLogs.push(smsRecord);
+            
+            // Write back to file
+            writeJSON(smsFile, smsLogs);
+            
+            console.log(`📱 SMS logged: ${customerPhone}`);
+            return Promise.resolve(smsRecord.id);
+            
+        } catch (error) {
+            console.error('❌ Error logging SMS:', error.message);
+            return Promise.reject(error);
+        }
     }
 
     // Mark demo as sent for customer
     static markDemoSent(phone) {
-        return new Promise((resolve, reject) => {
-            const stmt = db.prepare(`
-                UPDATE customers 
-                SET demo_sent = 1, 
-                    demo_sent_date = ?,
-                    updated_at = ?
-                WHERE phone = ?
-            `);
+        try {
+            const calls = readJSON(callsFile);
+            let updated = 0;
             
-            const now = new Date().toISOString();
-            stmt.run([now, now, phone], function(err) {
-                if (err) {
-                    reject(err);
-                } else {
-                    console.log(`🎯 Demo marked as sent: ${phone}`);
-                    resolve(this.changes);
+            // Update all calls for this customer to mark demo_requested = true
+            calls.forEach(call => {
+                if (call.customer_phone === phone) {
+                    call.demo_requested = true;
+                    updated++;
                 }
             });
-            stmt.finalize();
-        });
+            
+            if (updated > 0) {
+                writeJSON(callsFile, calls);
+                console.log(`🎯 Demo marked as sent: ${phone}`);
+            }
+            
+            return Promise.resolve(updated);
+            
+        } catch (error) {
+            console.error('❌ Error marking demo as sent:', error.message);
+            return Promise.reject(error);
+        }
     }
 
     // ANALYTICS METHODS
 
     // Get call statistics
     static getCallStats(timeframe = '7days') {
-        return new Promise((resolve, reject) => {
-            let timeFilter = '';
-            const now = new Date();
+        try {
+            const calls = readJSON(callsFile);
+            let filteredCalls = calls;
             
-            switch (timeframe) {
-                case '24hours':
-                    timeFilter = `WHERE call_date >= datetime('now', '-1 day')`;
-                    break;
-                case '7days':
-                    timeFilter = `WHERE call_date >= datetime('now', '-7 days')`;
-                    break;
-                case '30days':
-                    timeFilter = `WHERE call_date >= datetime('now', '-30 days')`;
-                    break;
-                default:
-                    timeFilter = '';
-            }
-
-            const query = `
-                SELECT 
-                    COUNT(*) as total_calls,
-                    COUNT(CASE WHEN call_status = 'completed' THEN 1 END) as completed_calls,
-                    AVG(call_duration) as avg_duration,
-                    COUNT(CASE WHEN demo_requested = 1 THEN 1 END) as demos_requested
-                FROM call_logs 
-                ${timeFilter}
-            `;
-
-            db.get(query, [], (err, row) => {
-                if (err) {
-                    reject(err);
-                } else {
-                    resolve(row);
+            // Apply time filter
+            if (timeframe !== 'all') {
+                const now = new Date();
+                let cutoffDate;
+                
+                switch (timeframe) {
+                    case '24hours':
+                        cutoffDate = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+                        break;
+                    case '7days':
+                        cutoffDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+                        break;
+                    case '30days':
+                        cutoffDate = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+                        break;
+                    default:
+                        cutoffDate = new Date(0);
                 }
-            });
-        });
+                
+                filteredCalls = calls.filter(call => 
+                    new Date(call.call_date) >= cutoffDate
+                );
+            }
+            
+            // Calculate stats
+            const stats = {
+                total_calls: filteredCalls.length,
+                completed_calls: filteredCalls.filter(call => 
+                    call.call_status === 'completed' || call.call_status === 'answered'
+                ).length,
+                avg_duration: filteredCalls.length > 0 
+                    ? filteredCalls.reduce((sum, call) => sum + (call.call_duration || 0), 0) / filteredCalls.length 
+                    : 0,
+                demos_requested: filteredCalls.filter(call => call.demo_requested).length
+            };
+            
+            return Promise.resolve(stats);
+            
+        } catch (error) {
+            return Promise.reject(error);
+        }
     }
 
     // Get demo conversion rate
     static getDemoStats() {
-        return new Promise((resolve, reject) => {
-            const query = `
-                SELECT 
-                    COUNT(DISTINCT c.phone) as total_customers,
-                    COUNT(CASE WHEN c.demo_sent = 1 THEN 1 END) as demos_sent,
-                    ROUND(
-                        (COUNT(CASE WHEN c.demo_sent = 1 THEN 1 END) * 100.0) / COUNT(DISTINCT c.phone), 
-                        2
-                    ) as conversion_rate
-                FROM customers c
-            `;
-
-            db.get(query, [], (err, row) => {
-                if (err) {
-                    reject(err);
-                } else {
-                    resolve(row);
-                }
-            });
-        });
+        try {
+            const calls = readJSON(callsFile);
+            
+            // Get unique customers
+            const customerPhones = [...new Set(calls.map(call => call.customer_phone))];
+            const customersWithDemos = [...new Set(
+                calls.filter(call => call.demo_requested).map(call => call.customer_phone)
+            )];
+            
+            const stats = {
+                total_customers: customerPhones.length,
+                demos_sent: customersWithDemos.length,
+                conversion_rate: customerPhones.length > 0 
+                    ? Math.round((customersWithDemos.length / customerPhones.length) * 100 * 100) / 100
+                    : 0
+            };
+            
+            return Promise.resolve(stats);
+            
+        } catch (error) {
+            return Promise.reject(error);
+        }
     }
 
     // Get daily call volume (for charts)
     static getDailyCallVolume(days = 7) {
-        return new Promise((resolve, reject) => {
-            const query = `
-                SELECT 
-                    DATE(call_date) as date,
-                    COUNT(*) as call_count,
-                    COUNT(CASE WHEN call_status = 'completed' THEN 1 END) as completed_calls
-                FROM call_logs 
-                WHERE call_date >= datetime('now', '-${days} days')
-                GROUP BY DATE(call_date)
-                ORDER BY date ASC
-            `;
-
-            db.all(query, [], (err, rows) => {
-                if (err) {
-                    reject(err);
-                } else {
-                    resolve(rows);
+        try {
+            const calls = readJSON(callsFile);
+            const now = new Date();
+            const cutoffDate = new Date(now.getTime() - days * 24 * 60 * 60 * 1000);
+            
+            // Filter calls within timeframe
+            const recentCalls = calls.filter(call => 
+                new Date(call.call_date) >= cutoffDate
+            );
+            
+            // Group by date
+            const callsByDate = {};
+            recentCalls.forEach(call => {
+                const date = new Date(call.call_date).toISOString().split('T')[0];
+                if (!callsByDate[date]) {
+                    callsByDate[date] = {
+                        date,
+                        call_count: 0,
+                        completed_calls: 0
+                    };
+                }
+                callsByDate[date].call_count++;
+                if (call.call_status === 'completed' || call.call_status === 'answered') {
+                    callsByDate[date].completed_calls++;
                 }
             });
-        });
+            
+            // Convert to array and sort
+            const result = Object.values(callsByDate)
+                .sort((a, b) => new Date(a.date) - new Date(b.date));
+            
+            return Promise.resolve(result);
+            
+        } catch (error) {
+            return Promise.reject(error);
+        }
     }
 
     // Get top service interests
     static getServiceInterests() {
-        return new Promise((resolve, reject) => {
-            const query = `
-                SELECT 
-                    service_interest,
-                    COUNT(*) as count,
-                    COUNT(CASE WHEN demo_sent = 1 THEN 1 END) as demos_sent
-                FROM customers 
-                WHERE service_interest IS NOT NULL 
-                GROUP BY service_interest 
-                ORDER BY count DESC
-            `;
-
-            db.all(query, [], (err, rows) => {
-                if (err) {
-                    reject(err);
-                } else {
-                    resolve(rows);
-                }
-            });
-        });
+        try {
+            // Since we don't track service interests in JSON, return empty
+            return Promise.resolve([]);
+        } catch (error) {
+            return Promise.reject(error);
+        }
     }
 
     // Get recent calls for dashboard
     static getRecentCalls(limit = 10) {
-        return new Promise((resolve, reject) => {
-            const query = `
-                SELECT 
-                    cl.call_sid,
-                    cl.customer_phone,
-                    cl.call_duration,
-                    cl.call_status,
-                    cl.call_date,
-                    c.demo_sent,
-                    c.service_interest
-                FROM call_logs cl
-                LEFT JOIN customers c ON cl.customer_phone = c.phone
-                ORDER BY cl.call_date DESC
-                LIMIT ?
-            `;
-
-            db.all(query, [limit], (err, rows) => {
-                if (err) {
-                    reject(err);
-                } else {
-                    resolve(rows);
-                }
-            });
-        });
+        try {
+            const calls = readJSON(callsFile);
+            
+            const result = calls
+                .sort((a, b) => new Date(b.call_date) - new Date(a.call_date))
+                .slice(0, limit)
+                .map(call => ({
+                    call_sid: call.call_sid,
+                    customer_phone: call.customer_phone,
+                    call_duration: call.call_duration,
+                    call_status: call.call_status,
+                    call_date: call.call_date,
+                    demo_sent: call.demo_requested,
+                    service_interest: 'general'
+                }));
+            
+            return Promise.resolve(result);
+            
+        } catch (error) {
+            return Promise.reject(error);
+        }
     }
 
     // LEGACY COMPATIBILITY METHODS (for existing code)
 
-    // Get calls (returns SQLite data in JSON format)
+    // Get calls (returns data in same format as SQLite)
     static getCalls() {
-        return new Promise((resolve, reject) => {
-            db.all('SELECT * FROM call_logs ORDER BY call_date DESC', [], (err, rows) => {
-                if (err) {
-                    reject(err);
-                } else {
-                    resolve(rows);
-                }
-            });
-        });
+        try {
+            const calls = readJSON(callsFile);
+            return Promise.resolve(calls);
+        } catch (error) {
+            return Promise.reject(error);
+        }
     }
 
-    // Get conversations (returns SQLite data in JSON format)
+    // Get conversations (returns data in same format as SQLite)
     static getConversations() {
-        return new Promise((resolve, reject) => {
-            db.all('SELECT * FROM conversations ORDER BY timestamp DESC', [], (err, rows) => {
-                if (err) {
-                    reject(err);
-                } else {
-                    resolve(rows);
-                }
-            });
-        });
+        try {
+            const conversations = readJSON(conversationsFile);
+            return Promise.resolve(conversations);
+        } catch (error) {
+            return Promise.reject(error);
+        }
     }
 
-    // Close database connection
+    // Close database connection (no-op for JSON)
     static close() {
-        return new Promise((resolve, reject) => {
-            db.close((err) => {
-                if (err) {
-                    console.error('❌ Error closing database:', err.message);
-                    reject(err);
-                } else {
-                    console.log('✅ Database connection closed');
-                    resolve();
-                }
-            });
-        });
+        console.log('✅ JSON storage - no connection to close');
+        return Promise.resolve();
     }
 }
 
-// Handle graceful shutdown
+// Handle graceful shutdown (no-op for JSON)
 process.on('SIGINT', () => {
-    console.log('\n🔄 Closing database connection...');
+    console.log('\n🔄 JSON storage - graceful shutdown...');
     CallLogger.close().then(() => {
         process.exit(0);
     });
